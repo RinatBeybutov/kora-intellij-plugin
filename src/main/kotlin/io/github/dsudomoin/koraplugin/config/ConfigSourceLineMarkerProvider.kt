@@ -3,10 +3,15 @@ package io.github.dsudomoin.koraplugin.config
 import com.intellij.codeInsight.daemon.GutterIconNavigationHandler
 import com.intellij.codeInsight.daemon.LineMarkerInfo
 import com.intellij.codeInsight.daemon.LineMarkerProvider
-import com.intellij.codeInsight.navigation.PsiTargetNavigator
 import com.intellij.codeInsight.navigation.openFileWithPsiElement
+import com.intellij.ide.util.PsiElementListCellRenderer
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.editor.markup.GutterIconRenderer
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -17,6 +22,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiIdentifier
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -28,14 +34,17 @@ import org.jetbrains.uast.UMethod
 import org.jetbrains.uast.getUastParentOfType
 import org.jetbrains.uast.toUElement
 import org.jetbrains.yaml.psi.YAMLFile
+import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.popup.Balloon
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.ui.awt.RelativePoint
 import io.github.dsudomoin.koraplugin.KoraAnnotations
+import io.github.dsudomoin.koraplugin.util.HoconPluginUtil
 import io.github.dsudomoin.koraplugin.util.KoraLibraryUtil
 import java.awt.event.MouseEvent
+import javax.swing.Icon
 
 class ConfigSourceLineMarkerProvider : LineMarkerProvider, DumbAware {
 
@@ -129,12 +138,16 @@ class ConfigSourceLineMarkerProvider : LineMarkerProvider, DumbAware {
             object : Task.Backgroundable(project, "Resolving config key...", true) {
                 private var configPath: String? = null
                 private var targets: List<PsiElement> = emptyList()
+                private var needsHoconHint = false
 
                 override fun run(indicator: ProgressIndicator) {
                     com.intellij.openapi.application.ReadAction.compute<Unit, RuntimeException> {
                         configPath = resolveConfigPath(elt)
                         if (configPath != null) {
                             targets = findConfigKeyElements(project, configPath!!)
+                        }
+                        if (targets.isEmpty() && !HoconPluginUtil.isHoconPluginEnabled) {
+                            needsHoconHint = HoconPluginUtil.projectHasConfFiles(project)
                         }
                     }
                 }
@@ -143,6 +156,10 @@ class ConfigSourceLineMarkerProvider : LineMarkerProvider, DumbAware {
                     val path = configPath ?: return
                     when (targets.size) {
                         0 -> {
+                            if (needsHoconHint) {
+                                notifyHoconPluginRequired(project, path)
+                                return
+                            }
                             JBPopupFactory.getInstance()
                                 .createHtmlTextBalloonBuilder(
                                     "Config key not found: <b>$path</b>",
@@ -153,7 +170,7 @@ class ConfigSourceLineMarkerProvider : LineMarkerProvider, DumbAware {
                                 .show(RelativePoint(e), Balloon.Position.above)
                         }
                         1 -> openFileWithPsiElement(targets.single(), true, true)
-                        else -> PsiTargetNavigator(targets).navigate(e, "Choose Config Key", project)
+                        else -> showConfigKeyPopup(targets, e, project)
                     }
                 }
             }.queue()
@@ -345,4 +362,74 @@ private fun collectElements(element: PsiElement, targetClass: Class<*>, result: 
     for (child in element.children) {
         collectElements(child, targetClass, result)
     }
+}
+
+/**
+ * Explains why navigation found nothing when the project has `.conf` files
+ * but the optional HOCON plugin is not installed.
+ */
+private fun notifyHoconPluginRequired(project: Project, configPath: String) {
+    NotificationGroupManager.getInstance()
+        .getNotificationGroup("Kora")
+        .createNotification(
+            "HOCON plugin is required",
+            "Cannot navigate to <b>$configPath</b>: the project uses <code>.conf</code> files, " +
+                "which are supported by the optional <b>HOCON</b> plugin. " +
+                "Install it to enable navigation.",
+            NotificationType.WARNING,
+        )
+        .addAction(OpenPluginsSettingsAction())
+        .notify(project)
+}
+
+private class OpenPluginsSettingsAction : AnAction("Open Plugins settings…") {
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        ShowSettingsUtil.getInstance().showSettingsDialog(project, "Plugins")
+    }
+}
+
+/**
+ * Popup for choosing between several config files containing the same key.
+ * Left: full key path as written in the file; right (grey): file name.
+ */
+private fun showConfigKeyPopup(targets: List<PsiElement>, e: MouseEvent, project: Project) {
+    val sorted = targets.sortedWith(
+        compareBy({ it.containingFile?.name ?: "" }, { configKeyDisplayPath(it) })
+    )
+    val renderer = object : PsiElementListCellRenderer<PsiElement>() {
+        override fun getElementText(element: PsiElement): String = configKeyDisplayPath(element)
+
+        override fun getContainerText(element: PsiElement, name: String): String? =
+            element.containingFile?.name
+
+        override fun getIcon(element: PsiElement): Icon =
+            element.containingFile?.fileType?.icon ?: AllIcons.FileTypes.Any_type
+    }
+    JBPopupFactory.getInstance()
+        .createPopupChooserBuilder(sorted)
+        .setTitle("Choose Config Key")
+        .setRenderer(renderer)
+        .setItemChosenCallback { openFileWithPsiElement(it, true, true) }
+        .createPopup()
+        .show(RelativePoint(e))
+}
+
+/** Full dotted key path as written in the config file (YAML walk-up / HOCON fullPathText). */
+internal fun configKeyDisplayPath(element: PsiElement): String {
+    HoconReflectionCache.instance?.let { reflection ->
+        if (reflection.hKeyClass.isInstance(element)) {
+            return hoconKeyFullPath(element, reflection.fullPathTextMethod) ?: element.text
+        }
+    }
+    val parts = ArrayDeque<String>()
+    var current: PsiElement? = element
+    while (current != null) {
+        val keyValue = PsiTreeUtil.getParentOfType(current, YAMLKeyValue::class.java, false) ?: break
+        parts.addFirst(keyValue.keyText)
+        // Go above the found keyValue: getParentOfType with strict=false would
+        // match the keyValue itself again and loop forever.
+        current = keyValue.parent
+    }
+    return if (parts.isEmpty()) element.text else parts.joinToString(".")
 }

@@ -21,6 +21,7 @@ IntelliJ IDEA plugin for the [Kora Framework](https://kora-projects.github.io/ko
 
 **Config Navigation**
 - `@ConfigSource("path")` ↔ keys in `application.yml` / `application.conf` (HOCON)
+- `.conf` (HOCON) navigation requires the free **HOCON** plugin from the Marketplace (optional dependency)
 - Annotation values → config keys:
 
 | Annotation | Config path |
