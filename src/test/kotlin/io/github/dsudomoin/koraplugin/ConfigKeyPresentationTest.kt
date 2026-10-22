@@ -4,7 +4,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.dsudomoin.koraplugin.config.configKeyDisplayPath
-import io.github.dsudomoin.koraplugin.util.HoconPluginUtil
+import io.github.dsudomoin.koraplugin.config.projectHasConfConfig
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.junit.Assume.assumeTrue
@@ -68,20 +68,20 @@ class ConfigKeyPresentationTest : BasePlatformTestCase() {
 
     fun `test projectHasConfFiles is false without conf files`() {
         myFixture.configureByText("Dummy.java", "class Dummy {}")
-        assertFalse(HoconPluginUtil.projectHasConfFiles(project))
+        assertFalse(projectHasConfConfig(project))
     }
 
     fun `test projectHasConfFiles is true with conf file`() {
         myFixture.addFileToProject("application.conf", "key = 1")
         myFixture.configureByText("Dummy.java", "class Dummy {}")
-        assertTrue(HoconPluginUtil.projectHasConfFiles(project))
+        assertTrue(projectHasConfConfig(project))
     }
 
     fun `test hocon plugin is enabled in test environment`() {
         // The HOCON plugin is a test dependency (see build.gradle.kts), so the
         // "install HOCON" notification branch is not reachable in tests and is
         // covered by manual verification only.
-        assertTrue(HoconPluginUtil.isHoconPluginEnabled)
+        assertNotNull(Class.forName("org.jetbrains.plugins.hocon.psi.HKey"))
     }
 
     private fun findYamlKeyValue(element: PsiElement, keyText: String): YAMLKeyValue? {
