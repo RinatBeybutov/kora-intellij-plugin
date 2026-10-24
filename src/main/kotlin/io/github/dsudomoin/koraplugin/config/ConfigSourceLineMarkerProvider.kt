@@ -200,7 +200,7 @@ class ConfigSourceLineMarkerProvider : LineMarkerProvider, DumbAware {
 
 private val CONFIG_FILE_EXTENSIONS = listOf("yaml", "yml", "conf")
 
-/** True when the project contains at least one configuration with`.conf` extension. */
+/** True when the project has a Kora HOCON config: `application*.conf` or `reference.conf`. */
 internal fun projectHasConfConfig(project: Project): Boolean {
     return FilenameIndex.getAllFilesByExt(project, "conf", GlobalSearchScope.projectScope(project))
         .any { it.name == "reference.conf" || it.name.startsWith("application") }
