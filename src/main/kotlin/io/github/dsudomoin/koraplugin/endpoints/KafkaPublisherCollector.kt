@@ -11,8 +11,8 @@ import org.jetbrains.uast.toUElement
 
 /**
  * Outgoing Kafka topics: @KafkaPublisher interfaces with @KafkaPublisher.Topic methods.
- * The publisher `value` attribute is the producer config path; each @Topic value is an
- * outgoing topic. Methods without @Topic are not topic producers and are skipped.
+ * The publisher `value` attribute is the producer config path; each @Topic value is the config
+ * path of an outgoing topic. Methods without @Topic are not topic producers and are skipped.
  */
 object KafkaPublisherCollector {
 
@@ -31,8 +31,8 @@ object KafkaPublisherCollector {
 
             val topics = uClass.methods.mapNotNull { uMethod ->
                 val topicAnnotation = uMethod.findAnnotation(KoraAnnotations.KAFKA_PUBLISHER_TOPIC) ?: return@mapNotNull null
-                val topic = AttributeValueResolver.resolveStringAttributeValue(topicAnnotation, "value") ?: return@mapNotNull null
-                KafkaPublisherTopic(topic, EndpointTarget.method(publisherFqn, uMethod.name))
+                val configPath = AttributeValueResolver.resolveStringAttributeValue(topicAnnotation, "value") ?: return@mapNotNull null
+                KafkaPublisherTopic(configPath, EndpointTarget.method(publisherFqn, uMethod.name))
             }
             if (topics.isNotEmpty()) {
                 publishers.add(KafkaPublisher(publisherFqn, configPath, topics))

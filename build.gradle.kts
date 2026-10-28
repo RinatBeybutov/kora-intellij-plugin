@@ -1,5 +1,4 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
 
 plugins {

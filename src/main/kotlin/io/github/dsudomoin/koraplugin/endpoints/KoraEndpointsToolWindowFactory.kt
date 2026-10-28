@@ -7,8 +7,8 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 
 /**
- * "Kora Structure" tool window: HTTP endpoints (annotation-based and OpenAPI-generated)
- * and incoming Kafka topics, collected in the background. See ROADMAP.md F-09.
+ * "Kora Structure" tool window: HTTP endpoints (annotation-based and OpenAPI-generated),
+ * Kafka consumers/producers and DB entities, collected in the background.
  */
 class KoraEndpointsToolWindowFactory : ToolWindowFactory, DumbAware {
 

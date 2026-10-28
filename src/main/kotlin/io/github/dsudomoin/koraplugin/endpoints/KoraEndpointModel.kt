@@ -29,8 +29,11 @@ data class KoraEndpoint(
     val targets: List<EndpointTarget>,
 )
 
-/** Incoming Kafka topic: @KafkaListener with the topic in its `value` attribute. */
-data class KafkaConsumer(val topic: String, val targets: List<EndpointTarget>)
+/**
+ * Kafka consumer: @KafkaListener. Its `value` is a config path (Kora KafkaListenerConfig), not a topic
+ * name: the topics are configured under that path.
+ */
+data class KafkaConsumer(val configPath: String, val targets: List<EndpointTarget>)
 
 /**
  * Outgoing Kafka topics: @KafkaPublisher interface with @KafkaPublisher.Topic methods.
@@ -42,7 +45,8 @@ data class KafkaPublisher(
     val topics: List<KafkaPublisherTopic>,
 )
 
-data class KafkaPublisherTopic(val topic: String, val target: EndpointTarget)
+/** @KafkaPublisher.Topic: its `value` is the topic config path (Kora TopicConfig), not the topic name. */
+data class KafkaPublisherTopic(val configPath: String, val target: EndpointTarget)
 
 /** Database entity: @Table class; [tableName] from the annotation value. */
 data class DbEntity(val tableName: String, val classFqn: String, val target: EndpointTarget)

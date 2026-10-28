@@ -42,7 +42,7 @@ class KafkaPublisherCollectorTest : BasePlatformTestCase() {
         val publisher = publishers.single()
         assertEquals("EventPublisher", publisher.publisherFqn)
         assertEquals("kafka.producer.events", publisher.configPath)
-        assertEquals(listOf("orders", "payments"), publisher.topics.map { it.topic })
+        assertEquals(listOf("orders", "payments"), publisher.topics.map { it.configPath })
         assertEquals("sendOrder", publisher.topics.first().target.methodName)
     }
 
@@ -65,7 +65,7 @@ class KafkaPublisherCollectorTest : BasePlatformTestCase() {
 
         val publishers = KafkaPublisherCollector.collect(project)
         assertEquals(1, publishers.size)
-        assertEquals(listOf("kt-topic"), publishers.single().topics.map { it.topic })
+        assertEquals(listOf("kt-topic"), publishers.single().topics.map { it.configPath })
         assertEquals("send", publishers.single().topics.single().target.methodName)
     }
 

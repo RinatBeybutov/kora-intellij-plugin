@@ -253,8 +253,8 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
 
                 is ConsumerTopicPayload -> {
                     icon = AllIcons.Nodes.Method
-                    append(payload.consumer.topic)
-                    toolTipText = "Kafka consumer topic"
+                    append(payload.consumer.configPath)
+                    toolTipText = "@KafkaListener config path (topics are configured there)"
                 }
 
                 is PublisherPayload -> {
@@ -265,8 +265,8 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
 
                 is PublisherTopicPayload -> {
                     icon = AllIcons.Nodes.Method
-                    append(payload.topic.topic)
-                    toolTipText = "Kafka producer topic → ${payload.topic.target.methodName}"
+                    append(payload.topic.configPath)
+                    toolTipText = "@KafkaPublisher.Topic config path → ${payload.topic.target.methodName}"
                 }
 
                 is EntityPayload -> {
@@ -307,7 +307,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     }
 
     private class ConsumerTopicPayload(val consumer: KafkaConsumer) : TreePayload {
-        override fun toString() = consumer.topic
+        override fun toString() = consumer.configPath
     }
 
     private class PublisherPayload(val publisher: KafkaPublisher) : TreePayload {
@@ -315,7 +315,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     }
 
     private class PublisherTopicPayload(val topic: KafkaPublisherTopic) : TreePayload {
-        override fun toString() = topic.topic
+        override fun toString() = topic.configPath
     }
 
     private class EntityPayload(val entity: DbEntity) : TreePayload {

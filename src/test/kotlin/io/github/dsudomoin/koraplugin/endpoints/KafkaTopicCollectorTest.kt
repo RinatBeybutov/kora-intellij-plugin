@@ -35,7 +35,7 @@ class KafkaTopicCollectorTest : BasePlatformTestCase() {
         val topics = KafkaTopicCollector.collect(project)
         assertEquals(2, topics.size)
 
-        val orders = topics.first { it.topic == "orders" }
+        val orders = topics.first { it.configPath == "orders" }
         val target = orders.targets.single()
         assertEquals("OrderConsumer", target.classFqn)
         assertEquals("consume", target.methodName)
@@ -59,7 +59,7 @@ class KafkaTopicCollectorTest : BasePlatformTestCase() {
 
         val topics = KafkaTopicCollector.collect(project)
         assertEquals(1, topics.size)
-        assertEquals("kt-orders", topics.single().topic)
+        assertEquals("kt-orders", topics.single().configPath)
         assertEquals("KtConsumer", topics.single().targets.single().classFqn)
         assertEquals("consume", topics.single().targets.single().methodName)
     }
@@ -94,7 +94,7 @@ class KafkaTopicCollectorTest : BasePlatformTestCase() {
 
         val topics = KafkaTopicCollector.collect(project)
         assertEquals(1, topics.size)
-        assertEquals("orders", topics.single().topic)
+        assertEquals("orders", topics.single().configPath)
         assertEquals(2, topics.single().targets.size)
     }
 
