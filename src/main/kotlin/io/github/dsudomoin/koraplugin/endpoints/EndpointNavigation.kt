@@ -4,6 +4,7 @@ import com.intellij.json.psi.JsonProperty
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.notification.Notifications
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
@@ -14,6 +15,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBUI
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import java.awt.Component
@@ -22,25 +24,35 @@ import javax.swing.JList
 
 /**
  * Click-to-navigate for endpoint/topic targets. Targets are deflated to strings, so the
- * element is re-resolved in a fresh read action at click time; stale coordinates degrade
- * gracefully (nearest element or a warning balloon).
+ * element is re-resolved in a background read action at click time; stale coordinates degrade
+ * gracefully (nearest element or a warning balloon). The EDT only opens the resolved locations.
  */
 object EndpointNavigation {
 
     fun navigate(project: Project, targets: List<EndpointTarget>) {
         if (targets.isEmpty()) return
-        val elements = ReadAction.compute<List<PsiElement>, RuntimeException> {
-            targets.mapNotNull { resolveTarget(project, it) }.distinct()
+        ReadAction.nonBlocking<List<Location>> {
+            targets.mapNotNull { resolveTarget(project, it) }.distinct().mapNotNull { element ->
+                val file = element.containingFile?.virtualFile ?: return@mapNotNull null
+                Location(OpenFileDescriptor(project, file, element.textOffset), presentable(element))
+            }
         }
-        when (elements.size) {
-            0 -> Notifications.Bus.notify(
-                Notification("Kora", "Kora", "Endpoint location no longer exists", NotificationType.WARNING),
-                project,
-            )
-            1 -> navigateToElement(elements.single())
-            else -> showChooser(elements)
-        }
+            .inSmartMode(project)
+            .finishOnUiThread(ModalityState.defaultModalityState()) { locations ->
+                when (locations.size) {
+                    0 -> Notifications.Bus.notify(
+                        Notification("Kora", "Kora", "Endpoint location no longer exists", NotificationType.WARNING),
+                        project,
+                    )
+                    1 -> locations.single().descriptor.navigate(true)
+                    else -> showChooser(locations)
+                }
+            }
+            .submit(AppExecutorUtil.getAppExecutorService())
     }
+
+    /** A resolved target: where to open it and how to label it in the chooser. */
+    private class Location(val descriptor: OpenFileDescriptor, val label: String)
 
     private fun resolveTarget(project: Project, target: EndpointTarget): PsiElement? {
         if (target.classFqn != null) {
@@ -60,13 +72,8 @@ object EndpointNavigation {
         return null
     }
 
-    private fun navigateToElement(element: PsiElement) {
-        val file = element.containingFile?.virtualFile ?: return
-        OpenFileDescriptor(element.project, file, element.textOffset).navigate(true)
-    }
-
-    private fun showChooser(elements: List<PsiElement>) {
-        JBPopupFactory.getInstance().createPopupChooserBuilder(elements)
+    private fun showChooser(locations: List<Location>) {
+        JBPopupFactory.getInstance().createPopupChooserBuilder(locations)
             .setTitle("Choose Endpoint Location")
             .setRenderer(object : DefaultListCellRenderer() {
                 override fun getListCellRendererComponent(
@@ -77,14 +84,14 @@ object EndpointNavigation {
                     hasFocus: Boolean,
                 ): Component {
                     val component = super.getListCellRendererComponent(list, value, index, selected, hasFocus)
-                    (value as? PsiElement)?.let { text = presentable(it) }
+                    (value as? Location)?.let { text = it.label }
                     // After super: DefaultListCellRenderer resets the border from UIManager
                     // on every call, so a border set in init would be silently discarded.
                     border = JBUI.Borders.empty(2, 10)
                     return component
                 }
             })
-            .setItemChosenCallback { element -> navigateToElement(element) }
+            .setItemChosenCallback { it.descriptor.navigate(true) }
             .createPopup()
             .showInFocusCenter()
     }

@@ -35,10 +35,12 @@ object OpenApiEndpointCollector {
     private val PREFIX_PATH_PATTERN = Regex("""prefixPath\s*(?:\.\s*set\s*\(\s*|=\s*)"([^"]*)"""")
 
     fun collect(project: Project): List<KoraEndpoint> {
+        val specs = locateSpecFiles(project)
+        if (specs.isEmpty()) return emptyList()
         val delegateMethods = findDelegateMethodTargets(project)
         ProgressManager.checkCanceled()
         val prefixPath = findGeneratorPrefixPath(project)
-        return locateSpecFiles(project).flatMap { file ->
+        return specs.flatMap { file ->
             ProgressManager.checkCanceled()
             parseSpec(project, file).map { endpoint ->
                 val implTargets = endpoint.operationId?.let { delegateMethods[it].orEmpty() } ?: emptyList()
@@ -163,7 +165,8 @@ object OpenApiEndpointCollector {
         val result = HashMap<String, MutableList<EndpointTarget>>()
         AnnotatedElementsSearch.searchPsiClasses(componentClass, GlobalSearchScope.projectScope(project)).forEach { psiClass ->
             ProgressManager.checkCanceled()
-            if (psiClass.interfaces.none { it.name?.endsWith("Delegate") == true }) return@forEach
+            // implementsListTypes + className: the reference name, no resolve, so unindexed delegates still match.
+            if (psiClass.implementsListTypes.none { it.className?.endsWith("Delegate") == true }) return@forEach
             val classFqn = psiClass.qualifiedName ?: return@forEach
             for (method in psiClass.methods) {
                 result.getOrPut(method.name) { mutableListOf() }.add(EndpointTarget.method(classFqn, method.name))

@@ -89,4 +89,49 @@ class KafkaListenerLineMarkerProviderTest : BasePlatformTestCase() {
         assertEquals(1, markers.size)
         assertEquals("KafkaListener", markers.single().element?.text)
     }
+    fun `test single gutter icon on java KafkaListener with named value`() {
+        configureKafkaAnnotations()
+
+        myFixture.configureByText(
+            "NamedConsumer.java",
+            """
+            import ru.tinkoff.kora.kafka.common.annotation.KafkaListener;
+
+            public class NamedConsumer {
+                @KafkaListener(value = "path.to.kafka.consumer")
+                public void consume(String msg) {}
+            }
+            """.trimIndent(),
+        )
+
+        val identifiers = PsiTreeUtil.findChildrenOfType(myFixture.file, PsiIdentifier::class.java).toList()
+        val markers = collectMarkers(identifiers)
+
+        assertEquals(1, markers.size)
+        assertEquals("KafkaListener", markers.single().element?.text)
+    }
+
+    fun `test single gutter icon on kotlin KafkaListener with named value`() {
+        configureKafkaAnnotations()
+
+        myFixture.configureByText(
+            "KtNamedConsumer.kt",
+            """
+            import ru.tinkoff.kora.kafka.common.annotation.KafkaListener
+
+            class KtNamedConsumer {
+                @KafkaListener(value = "kt.consumer")
+                fun consume(msg: String) {}
+            }
+            """.trimIndent(),
+        )
+
+        val identifiers = PsiTreeUtil.collectElements(myFixture.file) {
+            it.node?.elementType == KtTokens.IDENTIFIER
+        }.toList()
+        val markers = collectMarkers(identifiers)
+
+        assertEquals(1, markers.size)
+        assertEquals("KafkaListener", markers.single().element?.text)
+    }
 }

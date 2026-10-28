@@ -42,6 +42,8 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, this)
     private val inFlight = AtomicBoolean(false)
     private var lastStamp = -1L
+    private var seenStamp = -1L
+    private var shown: KoraEndpointsSnapshot? = null
 
     init {
         tree.model = treeModel
@@ -70,7 +72,8 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     fun refresh() {
         if (project.isDisposed) return
         when {
-            DumbService.isDumb(project) -> showStatus("Waiting for indexes to finish…")
+            // Keep the last tree during reindexing (e.g. after KSP regeneration) instead of wiping it.
+            DumbService.isDumb(project) -> if (shown == null) showStatus("Waiting for indexes to finish…")
             !KoraLibraryUtil.hasKoraLibrary(project) -> showStatus("Add a Kora dependency to see Kora endpoints")
             inFlight.compareAndSet(false, true) -> KoraEndpointsAggregator.collectAsync(project, this) { snapshot ->
                 inFlight.set(false)
@@ -89,10 +92,12 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
         alarm.addRequest(
             {
                 val toolWindow = ToolWindowManager.getInstance(project).getToolWindow(KORA_ENDPOINTS_TOOL_WINDOW_ID)
-                if (toolWindow != null && toolWindow.isVisible &&
-                    KoraEndpointsAggregator.modificationStamp(project) != lastStamp
-                ) {
-                    refresh()
+                if (toolWindow != null && toolWindow.isVisible) {
+                    val stamp = KoraEndpointsAggregator.modificationStamp(project)
+                    // Debounce: re-collect once the stamp has held still for a full tick, so a
+                    // typing burst costs one collection after the pause, not one per tick.
+                    if (stamp != lastStamp && stamp == seenStamp) refresh()
+                    seenStamp = stamp
                 }
                 schedulePoll()
             },
@@ -106,7 +111,8 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     }
 
     private fun applySnapshot(snapshot: KoraEndpointsSnapshot) {
-        if (project.isDisposed) return
+        // Edits that don't change the result (e.g. inside method bodies) keep the tree and selection.
+        if (project.isDisposed || snapshot == shown) return
         if (snapshot.isEmpty) {
             showStatus("No Kora endpoints, Kafka topics or entities found")
             return
@@ -154,6 +160,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
         }
 
         treeModel.setRoot(root)
+        shown = snapshot
         restoreExpandedPaths(expandedPaths)
     }
 
@@ -173,6 +180,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
     }
 
     private fun showStatus(message: String) {
+        shown = null
         treeModel.setRoot(
             DefaultMutableTreeNode("Kora").apply { add(DefaultMutableTreeNode(MessagePayload(message))) },
         )
@@ -205,6 +213,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
         }
 
         override fun actionPerformed(e: AnActionEvent) {
+            KoraEndpointsAggregator.invalidate()
             lastStamp = -1L
             refresh()
         }
@@ -229,7 +238,7 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
                         payload.title.startsWith("DB") -> AllIcons.Nodes.DataSchema
                         else -> AllIcons.Nodes.DataTables
                     }
-                    append(payload.toString())
+                    append("${payload.title} (${payload.count})")
                 }
 
                 is OwnerPayload -> {
@@ -294,8 +303,9 @@ internal class KoraEndpointsPanel(private val project: Project) : SimpleToolWind
 
     private sealed interface TreePayload
 
+    // toString is the expanded-state key: no count in it, or a section collapses when its count changes.
     private data class SectionPayload(val title: String, val count: Int) : TreePayload {
-        override fun toString() = "$title ($count)"
+        override fun toString() = title
     }
 
     private data class OwnerPayload(val name: String) : TreePayload {

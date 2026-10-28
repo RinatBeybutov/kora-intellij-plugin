@@ -77,16 +77,24 @@ class KafkaListenerLineMarkerProvider : LineMarkerProvider, DumbAware {
         var current: PsiElement = element
         repeat(5) {
             current = current.parent ?: return false
+            // Only the annotation's own name: argument names (`value = ...`) and referenced
+            // constants sit under the same annotation node and must not get a second icon.
             when (current) {
-                is PsiAnnotation, is KtAnnotationEntry ->
-                    return element.getUastParentOfType<UAnnotation>()
-                        ?.qualifiedName == KoraAnnotations.KAFKA_LISTENER
+                is PsiAnnotation ->
+                    return current.nameReferenceElement == element.parent && isKafkaListener(element)
+
+                is KtAnnotationEntry ->
+                    return current.calleeExpression?.constructorReferenceExpression == element.parent &&
+                        isKafkaListener(element)
 
                 else -> {}
             }
         }
         return false
     }
+
+    private fun isKafkaListener(element: PsiElement): Boolean =
+        element.getUastParentOfType<UAnnotation>()?.qualifiedName == KoraAnnotations.KAFKA_LISTENER
 
     private class KafkaConfigNavigationHandler : GutterIconNavigationHandler<PsiElement> {
         override fun navigate(e: MouseEvent, elt: PsiElement) {

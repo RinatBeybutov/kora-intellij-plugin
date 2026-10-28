@@ -59,10 +59,6 @@ data class KoraEndpointsSnapshot(
 ) {
     val isEmpty: Boolean
         get() = endpoints.isEmpty() && consumers.isEmpty() && publishers.isEmpty() && entities.isEmpty()
-
-    companion object {
-        val EMPTY = KoraEndpointsSnapshot(emptyList(), emptyList(), emptyList(), emptyList())
-    }
 }
 
 /** Join a controller-level prefix with a route path: ("/api", "/pets/") → "/api/pets". */

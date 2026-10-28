@@ -9,6 +9,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.SimpleModificationTracker
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
@@ -27,6 +28,9 @@ object KoraEndpointsAggregator {
 
     private val LOG = Logger.getInstance(KoraEndpointsAggregator::class.java)
 
+    /** Bumped by the Refresh action: the cached snapshot is dropped even if nothing else changed. */
+    private val refreshTracker = SimpleModificationTracker()
+
     fun collectSnapshot(project: Project): KoraEndpointsSnapshot =
         CachedValuesManager.getManager(project).getCachedValue(project) {
             CachedValueProvider.Result.create(
@@ -36,8 +40,11 @@ object KoraEndpointsAggregator {
                 PsiModificationTracker.getInstance(project).forLanguage(YAMLLanguage.INSTANCE),
                 PsiModificationTracker.getInstance(project).forLanguage(JsonLanguage.INSTANCE),
                 VirtualFileManager.getInstance(),
+                refreshTracker,
             )
         }
+
+    fun invalidate() = refreshTracker.incModificationCount()
 
     /**
      * Background collection off the EDT. A nonBlocking read action is used instead of
