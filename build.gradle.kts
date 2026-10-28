@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
 
 plugins {
@@ -29,6 +30,7 @@ dependencies {
         testFramework(TestFrameworkType.Platform)
 
         bundledPlugin("com.intellij.java")
+        bundledPlugin("com.intellij.modules.json")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("org.jetbrains.plugins.yaml")
         plugin("org.jetbrains.plugins.hocon", "2026.1.1")
