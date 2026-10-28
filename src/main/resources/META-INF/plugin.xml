@@ -17,6 +17,8 @@
     <depends optional="true" config-file="hocon-support.xml">org.jetbrains.plugins.hocon</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Kora" displayType="BALLOON"/>
+
         <fileBasedIndex implementation="io.github.dsudomoin.koraplugin.index.KoraProviderIndex"/>
         <fileBasedIndex implementation="io.github.dsudomoin.koraplugin.index.KoraInjectionSiteIndex"/>
 
